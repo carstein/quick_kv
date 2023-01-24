@@ -1,14 +1,16 @@
-use std::collections::HashMap;
+use bincode;
+use std::{collections::HashMap, path::Path, fs::File};
+use serde::{Serialize, Deserialize};
 
 const PAGE_SIZE: u64 = 1024;
 
-#[derive(Debug, Clone, Copy)]
+#[derive(Debug, Clone, Copy, Serialize, Deserialize)]
 pub struct Location {
   offset: u64,
   length: u64,
 }
 
-#[derive(Debug)]
+#[derive(Debug, Serialize, Deserialize)]
 pub struct Metadata {
   index: HashMap<String, Location>,
   pub write_cursor: u64,
@@ -43,14 +45,16 @@ impl Location {
 }
 
 impl Metadata {
-  pub fn new(namespace: String) -> Metadata {
-    // if file exist, deserialize metadata
-    // otherwise, create empty one
-
+  pub fn new() -> Metadata {
     Metadata {
       index: HashMap::new(),
       write_cursor: 0,
     }
+  }
+
+  pub fn load_meta(meta_path: &Path) -> Metadata {
+    let meta_file = File::open(meta_path).unwrap();
+    bincode::deserialize_from(meta_file).unwrap()
   }
 
   pub fn get_write_cursor(&self) -> u64 {

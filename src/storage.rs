@@ -1,4 +1,5 @@
 use std::fs::{OpenOptions, File};
+use std::path::Path;
 use std::io::{Read, Seek, Write, SeekFrom};
 
 use crate::page::{Page, PAGE_SIZE};
@@ -16,17 +17,26 @@ pub struct Storage {
 }
 
 impl Storage {
-  pub fn new(namespace: String) -> Storage {
+  pub fn new(namespace: &String) -> Storage {
     let data_file =  OpenOptions::new()
         .read(true)
         .write(true)
         .create(true)
         .open(format!("{namespace}.data"))
         .expect("Failed to open provided namespace");
+    
+    // check if metadata file exist
+    let mut metadata = Metadata::new();
+    let meta_name = format!("{namespace}.meta");
+    let meta_path = Path::new(&meta_name);
+
+    if meta_path.exists() {
+      metadata = Metadata::load_meta(&meta_path);  
+    }
 
     Storage {
       data_file,
-      metadata: Metadata::new(namespace),
+      metadata: metadata,
       cache: vec!(),
     }
   }
