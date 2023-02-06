@@ -7,5 +7,6 @@ pub enum Error {
     KeyNotFound,
     ValueToLarge,
     DataFileSeek,
-    DataFileWrite
+    DataFileWrite,
+    MetadataSerialization
 }

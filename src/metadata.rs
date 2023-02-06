@@ -1,6 +1,10 @@
 use bincode;
-use std::{collections::HashMap, path::Path, fs::File};
+
+use std::collections::{HashMap, hash_map::Keys};
+use std::{path::Path, fs::File, io::Write};
 use serde::{Serialize, Deserialize};
+
+use crate::error;
 
 const PAGE_SIZE: u64 = 1024;
 
@@ -15,7 +19,6 @@ pub struct Metadata {
   index: HashMap<String, Location>,
   pub write_cursor: u64,
 }
-
 
 impl Location {
   pub fn new(offset:u64, length:u64) -> Location {
@@ -52,9 +55,12 @@ impl Metadata {
     }
   }
 
-  pub fn load_meta(meta_path: &Path) -> Metadata {
+  pub fn load_meta(meta_path: &Path) -> Result<Metadata, error::Error> {
     let meta_file = File::open(meta_path).unwrap();
-    bincode::deserialize_from(meta_file).unwrap()
+    let metadata = bincode::deserialize_from(meta_file)
+      .map_err(|_| error::Error::MetadataSerialization)?;
+
+    Ok(metadata)
   }
 
   pub fn get_write_cursor(&self) -> u64 {
@@ -71,6 +77,18 @@ impl Metadata {
 
   pub fn set_item_location(&mut self, name: &String, location: Location) {
     self.index.insert(name.to_owned(), location);
+  }
+
+  pub fn save_meta(&mut self, meta_path: &Path) -> Result<(), error::Error> {
+    let m = bincode::serialize(self).unwrap();
+    let mut meta_file = File::create(meta_path).unwrap();
+    meta_file.write_all(&m).unwrap();
+
+    Ok(())
+  }
+
+  pub fn get_keys(&self) -> Keys<String, Location> {
+    self.index.keys()
   }
 }
 

@@ -1,48 +1,57 @@
+use crate::page;
+use crate::metadata;
+use crate::error::Error;
+
+use std::collections::hash_map::Keys;
 use std::fs::{OpenOptions, File};
 use std::path::Path;
 use std::io::{Read, Seek, Write, SeekFrom};
 
-use crate::page::{Page, PAGE_SIZE};
-use crate::page;
-use crate::metadata::{Metadata, Location};
-use crate::error::Error;
 
 const NUM_PAGES: u64 = 32;
 
 #[derive(Debug)]
 pub struct Storage {
+  name: String,
   data_file: File,
-  metadata: Metadata,
-  cache: Vec<Page>,
+  metadata:metadata:: Metadata,
+  cache: Vec<page::Page>,
 }
 
 impl Storage {
-  pub fn new(namespace: &String) -> Storage {
+  pub fn new(namespace: &String) -> Result<Storage, Error> {
     let data_file =  OpenOptions::new()
         .read(true)
         .write(true)
         .create(true)
         .open(format!("{namespace}.data"))
-        .expect("Failed to open provided namespace");
+        .map_err(|_| Error::NamespaceNotFound)?;
     
     // check if metadata file exist
-    let mut metadata = Metadata::new();
+    let mut metadata = metadata::Metadata::new();
     let meta_name = format!("{namespace}.meta");
     let meta_path = Path::new(&meta_name);
 
     if meta_path.exists() {
-      metadata = Metadata::load_meta(&meta_path);  
+      metadata = metadata::Metadata::load_meta(meta_path)?;  
     }
 
-    Storage {
+    Ok(Storage {
+      name: namespace.clone(),
       data_file,
-      metadata: metadata,
+      metadata,
       cache: vec!(),
-    }
+    })
+  }
+
+  pub fn save(&mut self) {
+    let meta_name = format!("{}.meta", &self.name);
+    let meta_path = Path::new(&meta_name);
+    self.metadata.save_meta(meta_path);
   }
   
-  pub fn load_page(&mut self, page_offset: u64) -> Result<Page, Error> {
-    let mut page = Page::new();
+  pub fn load_page(&mut self, page_offset: u64) -> Result<page::Page, Error> {
+    let mut page = page::Page::new();
     let metadata = self.data_file.metadata().unwrap();
 
     // check offset
@@ -64,28 +73,27 @@ impl Storage {
       None => return Err(Error::KeyNotFound) 
     };
 
-    match self.data_file.seek(SeekFrom::Start(item_location.get_offset())) {
-      Ok(_) => {}
-      Err(_) => return Err(Error::DataFileSeek)
-    };
+    if let Err(_) = self.data_file.seek(SeekFrom::Start(item_location.get_offset())) {
+      return Err(Error::DataFileSeek);
+    }
 
     let mut buf = vec![0u8; item_location.len()as usize];
-    match self.data_file.read_exact(&mut buf) {
-      Ok(_) => {}
-      Err(_) => return Err(Error::DataFileWrite)
-    };
+    
+    if let Err(_) = self.data_file.read_exact(&mut buf) {
+      return Err(Error::DataFileWrite);
+    }
 
-    return Ok(buf)
+    Ok(buf)
   }
 
   pub fn write(&mut self, key: &String, value: &Vec<u8>) -> Result<(), Error> {
     // Check the data correctness
-    if value.len() > PAGE_SIZE as usize {
+    if value.len() > page::PAGE_SIZE as usize {
       return Err(Error::ValueToLarge);
     }
 
     let mut current_cursor = self.metadata.get_write_cursor();
-    let next_page_addr = (current_cursor + PAGE_SIZE) & !(PAGE_SIZE - 1);
+    let next_page_addr = (current_cursor + page::PAGE_SIZE) & !(page::PAGE_SIZE - 1);
 
     // Check if the current page has enough space for value
     if (next_page_addr - current_cursor) < value.len() as u64  {
@@ -94,25 +102,26 @@ impl Storage {
     }
     
     // create metadata entry first
-    let location: Location = Location::new(current_cursor, value.len() as u64);
+    let location: metadata::Location = metadata::Location::new(current_cursor, value.len() as u64);
     self.metadata.set_item_location(key, location);
 
     // Actually write data
-    // TODO: add error handling
-    match self.data_file.seek(SeekFrom::Start(current_cursor)) {
-      Ok(_) => {}
-      Err(_) => return Err(Error::DataFileSeek)
-    };
+    self.data_file.seek(SeekFrom::Start(current_cursor))
+        .map_err(|_| Error::DataFileSeek)?;
 
-    match self.data_file.write_all(value) {
-      Ok(_) => {}
-      Err(_) => return Err(Error::DataFileWrite)
-    };
+
+    if let Err(_) = self.data_file.write_all(value) {
+      return Err(Error::DataFileWrite);
+    }
 
     // Update cursor
     self.metadata.update_write_cursor(current_cursor + value.len() as u64);
 
     Ok(())
+  }
+
+  pub fn list_keys(&self) -> Keys<String, metadata::Location> {
+    self.metadata.get_keys()
   }
 }
 
@@ -122,7 +131,7 @@ mod tests {
 
   #[test]
   fn next_page_address() {
-    let next_page_addr = |x: u64|  (x + PAGE_SIZE) & !(PAGE_SIZE - 1);
+    let next_page_addr = |x: u64|  (x + page::PAGE_SIZE) & !(page::PAGE_SIZE - 1);
 
     let vals = [
       (0,1024),
