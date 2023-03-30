@@ -11,7 +11,7 @@ const PAGE_SIZE: u64 = 1024;
 #[derive(Debug, Clone, Copy, Serialize, Deserialize)]
 pub struct Location {
   offset: u64,
-  length: u64,
+  pub length: u64,
 }
 
 #[derive(Debug, Serialize, Deserialize)]
@@ -28,12 +28,8 @@ impl Location {
     }
   }
 
-  pub fn get_offset(self) -> u64 {
+  pub fn get_offset(&self) -> u64 {
     self.offset
-  }
-
-  pub fn len(self) -> u64 {
-    self.length
   }
 
   pub fn get_page_offset(self) -> u64 {
@@ -44,6 +40,12 @@ impl Location {
   pub fn get_relative_offset(self) -> u64 {
     // keep last 10 bits
     self.offset & !(PAGE_SIZE - 1)
+  }
+}
+
+impl Default for Metadata {
+  fn default() -> Self {
+    Self::new()
   }
 }
 
@@ -71,8 +73,8 @@ impl Metadata {
     self.write_cursor = new_cursor;
   }
 
-  pub fn get_item_location(&self, key: &String) -> Option<&Location> {
-    self.index.get(key)
+  pub fn get_item_location(&self, key: &String) -> Option<Location> {
+    self.index.get(key).copied()
   }
 
   pub fn set_item_location(&mut self, name: &String, location: Location) {
@@ -87,8 +89,16 @@ impl Metadata {
     Ok(())
   }
 
+  pub fn remove(&mut self, key: &String) {
+    self.index.remove(key);
+  }
+
   pub fn get_keys(&self) -> Keys<String, Location> {
     self.index.keys()
+  }
+
+  pub fn has_key(&self, key: &String) -> bool {
+    self.index.contains_key(key)
   }
 }
 

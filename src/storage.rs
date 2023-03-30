@@ -2,6 +2,7 @@ use crate::page;
 use crate::metadata;
 use crate::error::Error;
 
+use std::borrow::Borrow;
 use std::collections::hash_map::Keys;
 use std::fs::{OpenOptions, File};
 use std::path::Path;
@@ -16,6 +17,13 @@ pub struct Storage {
   data_file: File,
   metadata:metadata:: Metadata,
   cache: Vec<page::Page>,
+}
+
+impl Drop for Storage {
+  fn drop(&mut self) {
+      println!("Dropping storage and saving metadata");
+      self.save();
+  }
 }
 
 impl Storage {
@@ -47,10 +55,10 @@ impl Storage {
   pub fn save(&mut self) {
     let meta_name = format!("{}.meta", &self.name);
     let meta_path = Path::new(&meta_name);
-    self.metadata.save_meta(meta_path);
+    self.metadata.save_meta(meta_path).unwrap();
   }
   
-  pub fn load_page(&mut self, page_offset: u64) -> Result<page::Page, Error> {
+  pub fn cache_page(&mut self, page_offset: u64) -> Result<&page::Page, Error> {
     let mut page = page::Page::new();
     let metadata = self.data_file.metadata().unwrap();
 
@@ -59,37 +67,53 @@ impl Storage {
       return Err(Error::FileTooSmall);
     }
 
-    // Read page (TODO: handle unwraps)
-    self.data_file.seek(std::io::SeekFrom::Start(page_offset)).unwrap();
-    self.data_file.read(&mut page.data).unwrap();
+    // Read page
+    if self.data_file.seek(std::io::SeekFrom::Start(page_offset)).is_err() {
+      return Err(Error::LoadPageFail);
+    }
 
-    Ok(page)
+    if self.data_file.read(&mut page.data).is_err() {
+      return Err(Error::LoadPageFail);
+    }
+
+    self.cache.push(page);
+    Ok(self.cache.last().unwrap())
   }
 
   pub fn read(&mut self, key: &String) -> Result<Vec<u8>, Error> {
     // find key in metadata and retrieve offset + length
     let item_location = match self.metadata.get_item_location(key) {
-      Some(offset) => offset,
+      Some(location) => location,
       None => return Err(Error::KeyNotFound) 
     };
 
-    if let Err(_) = self.data_file.seek(SeekFrom::Start(item_location.get_offset())) {
-      return Err(Error::DataFileSeek);
-    }
+    // Check if page is already in cache
+    // if not found, store value in cache 
+    let page = match self.cache.iter().find(|x| x.offset == item_location.get_page_offset()) {
+      Some(v) => v,
+      None => {
+        match self.cache_page(item_location.get_page_offset()) {
+          Ok(p) => p,
+          Err(_) => {
+            return Err(Error::LoadPageFail)
+          }
+        }
+      }
+    };
 
-    let mut buf = vec![0u8; item_location.len()as usize];
-    
-    if let Err(_) = self.data_file.read_exact(&mut buf) {
-      return Err(Error::DataFileWrite);
-    }
-
-    Ok(buf)
+    // Read from cache
+    Ok(page.read(&item_location).unwrap())
   }
 
   pub fn write(&mut self, key: &String, value: &Vec<u8>) -> Result<(), Error> {
     // Check the data correctness
     if value.len() > page::PAGE_SIZE as usize {
       return Err(Error::ValueToLarge);
+    }
+
+    // Check if key already exist
+    if self.metadata.has_key(key) {
+      self.delete(&key);
     }
 
     let mut current_cursor = self.metadata.get_write_cursor();
@@ -110,18 +134,34 @@ impl Storage {
         .map_err(|_| Error::DataFileSeek)?;
 
 
-    if let Err(_) = self.data_file.write_all(value) {
+    if self.data_file.write_all(value).is_err() {
       return Err(Error::DataFileWrite);
     }
 
     // Update cursor
     self.metadata.update_write_cursor(current_cursor + value.len() as u64);
 
+    // invalidate cache
+    self.cache.clear();
+
     Ok(())
+  }
+
+  pub fn delete(&mut self, key: &String) {
+    self.metadata.remove(key);
   }
 
   pub fn list_keys(&self) -> Keys<String, metadata::Location> {
     self.metadata.get_keys()
+  }
+
+  /// Status functions
+  pub fn get_item_location(&self, key: &String) -> Option<metadata::Location> {
+    self.metadata.get_item_location(key)
+  }
+
+  pub fn get_cache(&self) -> &Vec<page::Page> {
+    &self.cache
   }
 }
 

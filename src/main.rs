@@ -7,61 +7,57 @@ use storage::Storage;
 use std::io::{self, stdin, Write};
 
 enum KVCommand {
-    HELP,
-    QUIT,
-    LIST,
-    LOAD(String),
-    GET(String),
-    PUT(String, String),
-    INVALID
+    Help,
+    Quit,
+    List,
+    Status,
+    Load(String),
+    Get(String),
+    Put(String, String),
+    Invalid
 }
 
-impl Drop for storage::Storage {
-    fn drop(&mut self) {
-        println!("Dropping storage and saving metadata");
-        self.save();
-    }
-}
 
 fn parse_command(cmd_str: &Vec<&str>) -> KVCommand {
     match cmd_str.len() {
         1 => {
             if cmd_str[0].trim() == "help" {
-                return KVCommand::HELP;
+                return KVCommand::Help;
             }
         
             if cmd_str[0].trim() == "quit" {
-                return KVCommand::QUIT;
+                return KVCommand::Quit;
             }
     
             if cmd_str[0].trim() == "list" {
-                return KVCommand::LIST;
+                return KVCommand::List;
             }
 
+            if cmd_str[0].trim() == "status" {
+                return KVCommand::Status;
+            }
         },
         2 => {
             if cmd_str[0].trim() == "load" {
-                return KVCommand::LOAD(String::from(cmd_str[1].trim()));
+                return KVCommand::Load(String::from(cmd_str[1].trim()));
             }
     
             if cmd_str[0].trim() == "get" {
-                return KVCommand::GET(String::from(cmd_str[1].trim()));
+                return KVCommand::Get(String::from(cmd_str[1].trim()));
             }
-
         },
         3 => {
             if cmd_str[0].trim() == "put" {
-                return KVCommand::PUT(String::from(cmd_str[1].trim()), 
+                return KVCommand::Put(String::from(cmd_str[1].trim()), 
                         String::from(cmd_str[2].trim()));
             }
-
         },
         _ => {
-            return KVCommand::INVALID;
+            return KVCommand::Invalid;
         }
     }
 
-    KVCommand::INVALID
+    KVCommand::Invalid
 }
 
 fn help() {
@@ -72,6 +68,18 @@ fn help() {
     println!("get <key> -- prints the value of the key");
     println!("put <key> <value> -- adds pair <key>:<value> to the store");
     println!("quit -- quits the program");
+}
+
+fn status_metadata(storage: &Storage) {
+    println!("### Metadata");
+    for key in storage.list_keys() {
+        println!("{key}: {:?}", storage.get_item_location(key).unwrap())
+    }
+}
+
+fn status_cache(storage: &Storage) {
+    println!("### Cache");
+    println!("{:?}", storage.get_cache());
 }
 
 fn main() {
@@ -92,13 +100,26 @@ fn main() {
         let cmd = parse_command(&cmd_str);
 
         match cmd {
-            KVCommand::HELP => help(),
-            KVCommand::QUIT => {
+            KVCommand::Help => help(),
+            KVCommand::Quit => {
                 println!("Bye!");
                 break;
             },
 
-            KVCommand::LIST => {
+            KVCommand::Status => {
+                println!("Status: ");
+                match &mut storage {
+                    Some(s) => {
+                        status_metadata(&s);
+                        status_cache(&s);
+                    },
+                    None => {
+                        println!("[!] Storage not selected");
+                    }
+                }
+            },
+
+            KVCommand::List => {
                 match &storage {
                     Some(s) => {
                         for key in s.list_keys() {
@@ -111,7 +132,7 @@ fn main() {
                 }
             },
 
-            KVCommand::GET(key) => {
+            KVCommand::Get(key) => {
                 match &mut storage {
                     Some(s) => {
                         match s.read(&key) {
@@ -130,7 +151,7 @@ fn main() {
                 }
             },
 
-            KVCommand::LOAD(ns) => {
+            KVCommand::Load(ns) => {
                 println!("[#] Loading storage \"{ns}\"");
                 match Storage::new(&ns) {
                     Ok(s) => {
@@ -144,7 +165,7 @@ fn main() {
                 }
             },
 
-            KVCommand::PUT(key, value) => {
+            KVCommand::Put(key, value) => {
                 match &mut storage {
                     Some(s) => {
                         if let Err(e) = s.write(&key, &value.bytes().collect()) {
@@ -159,7 +180,7 @@ fn main() {
                 }
             },
 
-            KVCommand::INVALID => {
+            KVCommand::Invalid => {
                 println!("Command invalid!");
             },
         }

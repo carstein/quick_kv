@@ -8,5 +8,6 @@ pub enum Error {
     ValueToLarge,
     DataFileSeek,
     DataFileWrite,
-    MetadataSerialization
+    MetadataSerialization,
+    LoadPageFail,
 }
