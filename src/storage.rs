@@ -20,7 +20,9 @@ pub struct Storage {
 
 impl Drop for Storage {
   fn drop(&mut self) {
-      self.save();
+      if self.save().is_err() {
+        println!("[!] Failed saving storage.")
+      }
   }
 }
 
@@ -50,15 +52,17 @@ impl Storage {
     })
   }
 
-  pub fn save(&mut self) {
+  pub fn save(&mut self) -> Result<(), Error> {
     let meta_name = format!("{}.meta", &self.name);
     let meta_path = Path::new(&meta_name);
-    self.metadata.save_meta(meta_path).unwrap();
+    self.metadata.save_meta(meta_path)?;
+
+    Ok(())
   }
   
   pub fn cache_page(&mut self, page_offset: u64) -> Result<&page::Page, Error> {
     let mut page = page::Page::new();
-    let file_metadata = self.data_file.metadata().unwrap();
+    let file_metadata = self.data_file.metadata().map_err(|_| Error::CacheReadFailed)?;
 
     // check offset
     if page_offset >= file_metadata.len() {
@@ -100,7 +104,7 @@ impl Storage {
     };
 
     // Read from cache
-    Ok(page.read(&item_location).unwrap())
+    page.read(&item_location)
   }
 
   pub fn write(&mut self, key: &String, value: &Vec<u8>) -> Result<(), Error> {

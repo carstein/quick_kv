@@ -73,7 +73,7 @@ fn help() {
 fn status_metadata(storage: &Storage) {
     println!("### Metadata");
     for key in storage.list_keys() {
-        println!("{key}: {:?}", storage.get_item_location(key).unwrap())
+        println!("{key}: {:?}", storage.get_item_location(key))
     }
 }
 
@@ -91,9 +91,15 @@ fn main() {
 
     loop {
         print!("{namespace}> ");
-        io::stdout().flush().unwrap();
+        if io::stdout().flush().is_err() {
+            return 
+        }
 
-        stdin().read_line(&mut user_input).unwrap();
+        if stdin().read_line(&mut user_input).is_err() {
+            println!("[!] Cannot read standard input.");
+            return
+        }
+        
         let cmd_str: Vec<&str> = user_input.split(' ').collect();
 
         // Parse commands

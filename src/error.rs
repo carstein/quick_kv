@@ -10,5 +10,9 @@ pub enum Error {
     DataFileWrite,
     MetadataSerialization,
     LoadPageFail,
-    CacheEmpty
+    CacheEmpty,
+    MetadataDoesntExist, 
+    MetadataSaveFailed,
+    MetadataCreateFailed,
+    CacheReadFailed
 }

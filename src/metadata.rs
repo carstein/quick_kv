@@ -4,7 +4,7 @@ use std::collections::{HashMap, hash_map::Keys};
 use std::{path::Path, fs::File, io::Write};
 use serde::{Serialize, Deserialize};
 
-use crate::error;
+use crate::error::Error;
 
 const PAGE_SIZE: u64 = 1024;
 
@@ -39,7 +39,7 @@ impl Location {
 
   pub fn get_relative_offset(self) -> u64 {
     // keep last 10 bits
-    self.offset & !(PAGE_SIZE - 1)
+    self.offset & (PAGE_SIZE - 1)
   }
 }
 
@@ -57,10 +57,10 @@ impl Metadata {
     }
   }
 
-  pub fn load_meta(meta_path: &Path) -> Result<Metadata, error::Error> {
-    let meta_file = File::open(meta_path).unwrap();
+  pub fn load_meta(meta_path: &Path) -> Result<Metadata, Error> {
+    let meta_file = File::open(meta_path).map_err(|_| Error::MetadataDoesntExist)?;
     let metadata = bincode::deserialize_from(meta_file)
-      .map_err(|_| error::Error::MetadataSerialization)?;
+      .map_err(|_| Error::MetadataSerialization)?;
 
     Ok(metadata)
   }
@@ -81,11 +81,10 @@ impl Metadata {
     self.index.insert(name.to_owned(), location);
   }
 
-  // TODO: handle errors better
-  pub fn save_meta(&mut self, meta_path: &Path) -> Result<(), error::Error> {
-    let m = bincode::serialize(self).unwrap();
-    let mut meta_file = File::create(meta_path).unwrap();
-    meta_file.write_all(&m).unwrap();
+  pub fn save_meta(&mut self, meta_path: &Path) -> Result<(), Error> {
+    let m = bincode::serialize(self).map_err(|_| Error::MetadataSerialization)?;
+    let mut meta_file = File::create(meta_path).map_err(|_| Error::MetadataCreateFailed)?;
+    meta_file.write_all(&m).map_err(|_| Error::MetadataSaveFailed)?;
 
     Ok(())
   }
@@ -121,5 +120,25 @@ mod tests {
 
       assert_eq!(location_1.get_page_offset(), 0);
       assert_eq!(location_2.get_page_offset(), 1024);
+    }
+
+    #[test]
+    fn relative_offset() {
+      let location_1 = Location {
+        offset: 12,
+        length: 10
+      };
+      let location_2 = Location {
+        offset: 1480,
+        length: 10
+      };
+      let location_3 = Location {
+        offset: 0,
+        length: 10
+      };
+
+      assert_eq!(location_1.get_relative_offset(), 12);
+      assert_eq!(location_2.get_relative_offset(), 456);
+      assert_eq!(location_3.get_relative_offset(), 0);
     }
 }

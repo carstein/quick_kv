@@ -29,9 +29,10 @@ impl Page {
 
   pub fn read(&self, location: &metadata::Location) -> Result<Vec<u8>, error::Error> {
 
+    let s = location.get_relative_offset() as usize;
     let r = Range {
-      start: location.get_relative_offset() as usize,
-      end: location.length as usize
+      start: s,
+      end: s + location.length as usize
     };
     
     let v = &self.data[r];
