@@ -10,4 +10,5 @@ pub enum Error {
     DataFileWrite,
     MetadataSerialization,
     LoadPageFail,
+    CacheEmpty
 }

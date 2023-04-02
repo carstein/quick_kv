@@ -81,6 +81,7 @@ impl Metadata {
     self.index.insert(name.to_owned(), location);
   }
 
+  // TODO: handle errors better
   pub fn save_meta(&mut self, meta_path: &Path) -> Result<(), error::Error> {
     let m = bincode::serialize(self).unwrap();
     let mut meta_file = File::create(meta_path).unwrap();

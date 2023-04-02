@@ -2,14 +2,13 @@ use crate::page;
 use crate::metadata;
 use crate::error::Error;
 
-use std::borrow::Borrow;
 use std::collections::hash_map::Keys;
 use std::fs::{OpenOptions, File};
 use std::path::Path;
 use std::io::{Read, Seek, Write, SeekFrom};
 
 
-const NUM_PAGES: u64 = 32;
+// const NUM_PAGES: u64 = 32;
 
 #[derive(Debug)]
 pub struct Storage {
@@ -21,7 +20,6 @@ pub struct Storage {
 
 impl Drop for Storage {
   fn drop(&mut self) {
-      println!("Dropping storage and saving metadata");
       self.save();
   }
 }
@@ -41,7 +39,7 @@ impl Storage {
     let meta_path = Path::new(&meta_name);
 
     if meta_path.exists() {
-      metadata = metadata::Metadata::load_meta(meta_path)?;  
+      metadata = metadata::Metadata::load_meta(meta_path)?;
     }
 
     Ok(Storage {
@@ -60,10 +58,10 @@ impl Storage {
   
   pub fn cache_page(&mut self, page_offset: u64) -> Result<&page::Page, Error> {
     let mut page = page::Page::new();
-    let metadata = self.data_file.metadata().unwrap();
+    let file_metadata = self.data_file.metadata().unwrap();
 
     // check offset
-    if page_offset >= (metadata.len() - page::PAGE_SIZE) {
+    if page_offset >= file_metadata.len() {
       return Err(Error::FileTooSmall);
     }
 
@@ -77,7 +75,7 @@ impl Storage {
     }
 
     self.cache.push(page);
-    Ok(self.cache.last().unwrap())
+    self.cache.last().ok_or(Error::CacheEmpty)
   }
 
   pub fn read(&mut self, key: &String) -> Result<Vec<u8>, Error> {
@@ -89,7 +87,7 @@ impl Storage {
 
     // Check if page is already in cache
     // if not found, store value in cache 
-    let page = match self.cache.iter().find(|x| x.offset == item_location.get_page_offset()) {
+    let page = match self.cache.iter().find(|item| item.offset == item_location.get_page_offset()) {
       Some(v) => v,
       None => {
         match self.cache_page(item_location.get_page_offset()) {
@@ -126,7 +124,7 @@ impl Storage {
     }
     
     // create metadata entry first
-    let location: metadata::Location = metadata::Location::new(current_cursor, value.len() as u64);
+    let location = metadata::Location::new(current_cursor, value.len() as u64);
     self.metadata.set_item_location(key, location);
 
     // Actually write data
