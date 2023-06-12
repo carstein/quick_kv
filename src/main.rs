@@ -67,6 +67,7 @@ fn help() {
     println!("list -- list all the keys");
     println!("get <key> -- prints the value of the key");
     println!("put <key> <value> -- adds pair <key>:<value> to the store");
+    println!("status - print status");
     println!("quit -- quits the program");
 }
 
