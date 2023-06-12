@@ -32,12 +32,12 @@ impl Storage {
         .read(true)
         .write(true)
         .create(true)
-        .open(format!("{namespace}.data"))
+        .open(format!("data/{namespace}.data"))
         .map_err(|_| Error::NamespaceNotFound)?;
     
     // check if metadata file exist
     let mut metadata = metadata::Metadata::new();
-    let meta_name = format!("{namespace}.meta");
+    let meta_name = format!("data/{namespace}.meta");
     let meta_path = Path::new(&meta_name);
 
     if meta_path.exists() {
@@ -53,7 +53,7 @@ impl Storage {
   }
 
   pub fn save(&mut self) -> Result<(), Error> {
-    let meta_name = format!("{}.meta", &self.name);
+    let meta_name = format!("data/{}.meta", &self.name);
     let meta_path = Path::new(&meta_name);
     self.metadata.save_meta(meta_path)?;
 
