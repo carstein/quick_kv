@@ -108,12 +108,15 @@ impl Storage {
   }
 
   pub fn write(&mut self, key: &String, value: &Vec<u8>) -> Result<(), Error> {
+   // Adjust the size of the value to the next power of 2
+   let block_size = value.len().next_power_of_two() as u64;
+
     // Check the data correctness
-    if value.len() > page::PAGE_SIZE as usize {
+    if block_size > page::PAGE_SIZE {
       return Err(Error::ValueToLarge);
     }
 
-    // Check if key already exist
+    // Check if key already exist - probably not needed
     if self.metadata.has_key(key) {
       self.delete(&key);
     }
@@ -122,7 +125,7 @@ impl Storage {
     let next_page_addr = (current_cursor + page::PAGE_SIZE) & !(page::PAGE_SIZE - 1);
 
     // Check if the current page has enough space for value
-    if (next_page_addr - current_cursor) < value.len() as u64  {
+    if (next_page_addr - current_cursor) < block_size  {
       // not enough space in this page - move cursor to another page
       current_cursor = next_page_addr;
     }
@@ -141,7 +144,7 @@ impl Storage {
     }
 
     // Update cursor
-    self.metadata.update_write_cursor(current_cursor + value.len() as u64);
+    self.metadata.update_write_cursor(current_cursor + block_size);
 
     // invalidate cache
     self.cache.clear();
