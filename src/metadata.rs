@@ -88,8 +88,13 @@ impl Metadata {
     Ok(())
   }
 
-  pub fn remove(&mut self, key: &String) {
-    self.index.remove(key);
+  pub fn remove(&mut self, key: &String) -> Option<Location> {
+    if let Some(mut block) = self.index.remove(key) {
+      block.length = block.length.next_power_of_two();
+      return Some(block);
+    }
+
+    None
   }
 
   pub fn get_keys(&self) -> Keys<String, Location> {

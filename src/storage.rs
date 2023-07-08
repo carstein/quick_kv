@@ -12,8 +12,9 @@ use std::io::{Read, Seek, Write, SeekFrom};
 pub struct Storage {
   name: String,
   data_file: File,
-  metadata:metadata:: Metadata,
+  metadata: metadata::Metadata,
   cache: Vec<page::Page>,
+  free: Vec<metadata::Location>
 }
 
 impl Drop for Storage {
@@ -47,6 +48,7 @@ impl Storage {
       data_file,
       metadata,
       cache: vec!(),
+      free: vec!(),
     })
   }
 
@@ -118,17 +120,25 @@ impl Storage {
     }
 
     // Check if key already exist - probably not needed
-    if self.metadata.has_key(key) {
-      self.delete(&key);
-    }
+    // if self.metadata.has_key(key) {
+    //   self.delete(&key);
+    // }
 
     let mut current_cursor = self.metadata.get_write_cursor();
     let next_page_addr = (current_cursor + page::PAGE_SIZE) & !(page::PAGE_SIZE - 1);
 
     // Check if the current page has enough space for value
     if (next_page_addr - current_cursor) < block_size  {
-      // not enough space in this page - move cursor to another page
+      // not enough space in this page - record it as free block
+      let block = metadata::Location::new(
+        current_cursor,
+        next_page_addr - current_cursor
+      );
+      self.free.push(block);
+      
+      // move cursor to another page
       current_cursor = next_page_addr;
+
     }
     
     // create metadata entry first
@@ -153,8 +163,16 @@ impl Storage {
     Ok(())
   }
 
-  pub fn delete(&mut self, key: &String) {
-    self.metadata.remove(key);
+  pub fn delete(&mut self, key: &String) -> Result<(), Error> {
+    // Record data about the free block
+  
+    match self.metadata.remove(key) {
+      Some(block) => {
+        self.free.push(block);
+        Ok(())
+      },
+      None => Err(Error::KeyNotFound)
+    }
   }
 
   pub fn list_keys(&self) -> Keys<String, metadata::Location> {
@@ -168,6 +186,9 @@ impl Storage {
 
   pub fn get_cache(&self) -> &Vec<page::Page> {
     &self.cache
+  }
+  pub fn get_free(&self) -> &Vec<metadata::Location> {
+    &self.free
   }
 }
 

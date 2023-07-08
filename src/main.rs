@@ -14,6 +14,7 @@ enum KVCommand {
     Load(String),
     Get(String),
     Put(String, String),
+    Delete(String),
     Invalid
 }
 
@@ -45,6 +46,10 @@ fn parse_command(cmd_str: &Vec<&str>) -> KVCommand {
             if cmd_str[0].trim() == "get" {
                 return KVCommand::Get(String::from(cmd_str[1].trim()));
             }
+
+            if cmd_str[0].trim() == "delete" {
+                return KVCommand::Delete(String::from(cmd_str[1].trim()));
+            }
         },
         3 => {
             if cmd_str[0].trim() == "put" {
@@ -66,6 +71,7 @@ fn help() {
     println!("load <namespace> -- loads given namespace");
     println!("list -- list all the keys");
     println!("get <key> -- prints the value of the key");
+    println!("delete <key> -- delete the value of the key");
     println!("put <key> <value> -- adds pair <key>:<value> to the store");
     println!("status - print status");
     println!("quit -- quits the program");
@@ -83,6 +89,11 @@ fn status_cache(storage: &Storage) {
     for page in storage.get_cache() {
         println!("{}", page);
     }
+}
+
+fn status_free(storage: &Storage) {
+    println!("### Free blocks");
+    println!("{:?}", storage.get_free());
 }
 
 fn main() {
@@ -121,6 +132,7 @@ fn main() {
                     Some(s) => {
                         status_metadata(&s);
                         status_cache(&s);
+                        status_free(&s);
                     },
                     None => {
                         println!("[!] Storage not selected");
@@ -181,6 +193,21 @@ fn main() {
                             println!("[!] Error writing {key}:{value} - {e:?}");
                         } else {
                             println!("[#] Value stored");
+                        };
+                    },
+                    None => {
+                        println!("[!] Storage not selected");
+                    }
+                }
+            },
+
+            KVCommand::Delete(key) => {
+                match &mut storage {
+                    Some(s) => {
+                        if let Err(e) = s.delete(&key) {
+                            println!("[!] Error deleting {key} - {e:?}");
+                        } else {
+                            println!("[#] Value deleted");
                         };
                     },
                     None => {
