@@ -5,8 +5,7 @@ use std::{path::Path, fs::File, io::Write};
 use serde::{Serialize, Deserialize};
 
 use crate::error::Error;
-
-const PAGE_SIZE: u64 = 1024;
+use crate::page::PAGE_SIZE;
 
 #[derive(Debug, Clone, Copy, Serialize, Deserialize)]
 pub struct Location {
@@ -110,16 +109,16 @@ mod tests {
     #[test]
     fn page_offset() {
       let location_1 = Location {
-        offset: 536,
+        offset: 100,
         length: 10
       };
       let location_2 = Location {
-        offset: 1536,
+        offset: PAGE_SIZE + 100,
         length: 10
       };
 
       assert_eq!(location_1.get_page_offset(), 0);
-      assert_eq!(location_2.get_page_offset(), 1024);
+      assert_eq!(location_2.get_page_offset(), PAGE_SIZE);
     }
 
     #[test]
@@ -129,7 +128,7 @@ mod tests {
         length: 10
       };
       let location_2 = Location {
-        offset: 1480,
+        offset: PAGE_SIZE + 10,
         length: 10
       };
       let location_3 = Location {
@@ -138,7 +137,7 @@ mod tests {
       };
 
       assert_eq!(location_1.get_relative_offset(), 12);
-      assert_eq!(location_2.get_relative_offset(), 456);
+      assert_eq!(location_2.get_relative_offset(), 10);
       assert_eq!(location_3.get_relative_offset(), 0);
     }
 }

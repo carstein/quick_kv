@@ -1,9 +1,10 @@
 use std::ops::Range;
+use std::fmt;
 
 use crate::metadata;
 use crate::error;
 
-pub const PAGE_SIZE: u64 = 1024;
+pub const PAGE_SIZE: u64 = 128;
 
 #[derive(Debug)]
  pub struct Page {
@@ -18,6 +19,13 @@ impl Default for Page {
   }
 }
 
+impl fmt::Display for Page {
+  fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
+
+        write!(f, "Page< 0x{} >", self.offset)
+  }
+}
+
 impl Page {
   pub fn new() -> Page {
     Page {
@@ -28,7 +36,6 @@ impl Page {
   }
 
   pub fn read(&self, location: &metadata::Location) -> Result<Vec<u8>, error::Error> {
-
     let s = location.get_relative_offset() as usize;
     let r = Range {
       start: s,

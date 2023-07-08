@@ -80,7 +80,9 @@ fn status_metadata(storage: &Storage) {
 
 fn status_cache(storage: &Storage) {
     println!("### Cache");
-    println!("{:?}", storage.get_cache());
+    for page in storage.get_cache() {
+        println!("{}", page);
+    }
 }
 
 fn main() {

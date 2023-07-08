@@ -8,8 +8,6 @@ use std::path::Path;
 use std::io::{Read, Seek, Write, SeekFrom};
 
 
-// const NUM_PAGES: u64 = 32;
-
 #[derive(Debug)]
 pub struct Storage {
   name: String,
@@ -78,6 +76,9 @@ impl Storage {
       return Err(Error::LoadPageFail);
     }
 
+    // Set proper offset
+    page.offset = page_offset;
+
     self.cache.push(page);
     self.cache.last().ok_or(Error::CacheEmpty)
   }
@@ -91,7 +92,7 @@ impl Storage {
 
     // Check if page is already in cache
     // if not found, store value in cache 
-    let page = match self.cache.iter().find(|item| item.offset == item_location.get_page_offset()) {
+    let page = match self.cache.iter().find(|page| page.offset == item_location.get_page_offset()) {
       Some(v) => v,
       None => {
         match self.cache_page(item_location.get_page_offset()) {
@@ -108,8 +109,8 @@ impl Storage {
   }
 
   pub fn write(&mut self, key: &String, value: &Vec<u8>) -> Result<(), Error> {
-   // Adjust the size of the value to the next power of 2
-   let block_size = value.len().next_power_of_two() as u64;
+    // Adjust the size of the value to the next power of 2
+    let block_size = value.len().next_power_of_two() as u64;
 
     // Check the data correctness
     if block_size > page::PAGE_SIZE {
@@ -146,8 +147,8 @@ impl Storage {
     // Update cursor
     self.metadata.update_write_cursor(current_cursor + block_size);
 
-    // invalidate cache
-    self.cache.clear();
+    // selective cache invalidation
+    self.cache.retain(|p| p.offset != location.get_page_offset());
 
     Ok(())
   }
