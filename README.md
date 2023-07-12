@@ -1,20 +1,10 @@
-## Future development
+# Quick-KV - Quick and Dirty KV
 
-**Update**
-Add support for update command
+This is a toy project - a KV library.
 
-**Metadata**
-Serialize and deserialize metadata on start
-
-**Add cache**
-- on read create cache (no size limit)
-- invalidate cache on write (all of it)
-
-**Better cache**
-- invalidate single cache entry
-- cache limit - remove least access element on read
-
-**Remove elements**
-Add support for delete command 
-Set of free blocks
-Write use one of the free blocks
+**Features**
+- support for namespaces - you can create multiple different namespaces for your keys
+- storage backed by file
+- reading the key put them into memory cache
+- writing a new key only invalidates part of the cache where the new key was written
+- delete creates a free block that will be used in the next write if the size matches
