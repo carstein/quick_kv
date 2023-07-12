@@ -14,7 +14,6 @@ pub struct Storage {
   data_file: File,
   metadata: metadata::Metadata,
   cache: Vec<page::Page>,
-  free: Vec<metadata::Location>
 }
 
 impl Drop for Storage {
@@ -48,7 +47,6 @@ impl Storage {
       data_file,
       metadata,
       cache: vec!(),
-      free: vec!(),
     })
   }
 
@@ -119,60 +117,70 @@ impl Storage {
       return Err(Error::ValueToLarge);
     }
 
-    // Check if key already exist - probably not needed
-    // if self.metadata.has_key(key) {
-    //   self.delete(&key);
-    // }
+    // Handle free blocks
+    match self.metadata.get_free_block(block_size) {
+      Some(mut free_block) => {
+        let current_cursor = free_block.get_offset();
+        free_block.length = value.len() as u64;
 
-    let mut current_cursor = self.metadata.get_write_cursor();
-    let next_page_addr = (current_cursor + page::PAGE_SIZE) & !(page::PAGE_SIZE - 1);
+        self.metadata.set_item_location(key, free_block);
 
-    // Check if the current page has enough space for value
-    if (next_page_addr - current_cursor) < block_size  {
-      // not enough space in this page - record it as free block
-      let block = metadata::Location::new(
-        current_cursor,
-        next_page_addr - current_cursor
-      );
-      self.free.push(block);
-      
-      // move cursor to another page
-      current_cursor = next_page_addr;
+        // write data
+        self.data_file.seek(SeekFrom::Start(current_cursor))
+          .map_err(|_| Error::DataFileSeek)?;
 
-    }
+        if self.data_file.write_all(value).is_err() {
+          return Err(Error::DataFileWrite);
+        }
+
+      // selective cache invalidation
+      self.cache.retain(|p| p.offset != free_block.get_page_offset());
+      },
+      // No suitable free block
+      None => {
+        let mut current_cursor = self.metadata.get_write_cursor();
+        let next_page_addr = (current_cursor + page::PAGE_SIZE) & !(page::PAGE_SIZE - 1);
     
-    // create metadata entry first
-    let location = metadata::Location::new(current_cursor, value.len() as u64);
-    self.metadata.set_item_location(key, location);
+        // Check if the current page has enough space for value
+        if (next_page_addr - current_cursor) < block_size  {
+          // not enough space in this page - record it as free block
+          let block = metadata::Location::new(
+            current_cursor,
+            next_page_addr - current_cursor
+          );
+          self.metadata.add_free(block);
+          
+          // move cursor to another page
+          current_cursor = next_page_addr;
+        }
+        
+        // create metadata entry first
+        let location = metadata::Location::new(current_cursor, value.len() as u64);
+        self.metadata.set_item_location(key, location);
+    
+        // Actually write data
+        self.data_file.seek(SeekFrom::Start(current_cursor))
+          .map_err(|_| Error::DataFileSeek)?;
+    
+    
+        if self.data_file.write_all(value).is_err() {
+          return Err(Error::DataFileWrite);
+        }
+    
+        // Update cursor
+        self.metadata.update_write_cursor(current_cursor + block_size);
 
-    // Actually write data
-    self.data_file.seek(SeekFrom::Start(current_cursor))
-        .map_err(|_| Error::DataFileSeek)?;
-
-
-    if self.data_file.write_all(value).is_err() {
-      return Err(Error::DataFileWrite);
-    }
-
-    // Update cursor
-    self.metadata.update_write_cursor(current_cursor + block_size);
-
-    // selective cache invalidation
-    self.cache.retain(|p| p.offset != location.get_page_offset());
+       // selective cache invalidation
+       self.cache.retain(|p| p.offset != location.get_page_offset());
+      }
+    };
 
     Ok(())
   }
 
   pub fn delete(&mut self, key: &String) -> Result<(), Error> {
     // Record data about the free block
-  
-    match self.metadata.remove(key) {
-      Some(block) => {
-        self.free.push(block);
-        Ok(())
-      },
-      None => Err(Error::KeyNotFound)
-    }
+    self.metadata.remove(key)
   }
 
   pub fn list_keys(&self) -> Keys<String, metadata::Location> {
@@ -188,7 +196,7 @@ impl Storage {
     &self.cache
   }
   pub fn get_free(&self) -> &Vec<metadata::Location> {
-    &self.free
+    self.metadata.get_free()
   }
 }
 

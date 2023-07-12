@@ -16,6 +16,7 @@ pub struct Location {
 #[derive(Debug, Serialize, Deserialize)]
 pub struct Metadata {
   index: HashMap<String, Location>,
+  free: Vec<Location>,
   pub write_cursor: u64,
 }
 
@@ -23,7 +24,7 @@ impl Location {
   pub fn new(offset:u64, length:u64) -> Location {
     Location {
       offset,
-      length
+      length,
     }
   }
 
@@ -53,6 +54,7 @@ impl Metadata {
     Metadata {
       index: HashMap::new(),
       write_cursor: 0,
+      free: vec!()
     }
   }
 
@@ -88,13 +90,15 @@ impl Metadata {
     Ok(())
   }
 
-  pub fn remove(&mut self, key: &String) -> Option<Location> {
-    if let Some(mut block) = self.index.remove(key) {
-      block.length = block.length.next_power_of_two();
-      return Some(block);
+  pub fn remove(&mut self, key: &String) -> Result<(), Error> {
+    match self.index.remove(key) {
+      Some(mut block) => {
+        block.length = block.length.next_power_of_two();
+        self.free.push(block);
+        Ok(())
+      }
+      None => Err(Error::KeyNotFound)
     }
-
-    None
   }
 
   pub fn get_keys(&self) -> Keys<String, Location> {
@@ -103,6 +107,31 @@ impl Metadata {
 
   pub fn has_key(&self, key: &String) -> bool {
     self.index.contains_key(key)
+  }
+
+  pub fn get_free(&self) -> &Vec<Location> {
+    &self.free
+  }
+
+  pub fn get_free_block(&mut self, size: u64) -> Option<Location> {
+    let next_block_idx = self.free          
+        .iter()
+        .enumerate()                                     
+        .filter(|(_, b)| b.length >= size)              
+        .min_by_key(|(_, b)| b.length)                   
+        .map(|(index, _)| index);
+
+    match next_block_idx {
+      Some(block_idx) => {
+        let next_block: Location = self.free.swap_remove(block_idx);
+        return Some(next_block);
+      },
+      None => None
+    }            
+  }
+
+  pub fn add_free(&mut self, block: Location) {
+    self.free.push(block);
   }
 }
 
